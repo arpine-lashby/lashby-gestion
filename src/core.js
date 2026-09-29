@@ -22,3 +22,37 @@ export const consumeFifo = (lots, quantity) => {
   if(remaining>0)allocations.push({lot_id:null,quantity:remaining,unit_cost:null,cost_pending:true});
   return allocations;
 };
+
+export function cashExpected(session, movements=[]) {
+  if(!session)return 0;
+  return Number(session.opening_cash || 0)+movements
+    .filter(m=>m.cash_session_id===session.id&&m.status==='ACTIVE'&&m.method==='CASH')
+    .reduce((sum,m)=>sum+(m.direction==='IN'?1:-1)*Number(m.amount),0);
+}
+
+export function periodSummary(data, period) {
+  const within=value=>Boolean(value)&&businessDate(value).startsWith(period);
+  const sales=data.sales.filter(s=>s.status!=='VOID'&&within(s.created_at));
+  const expenses=data.expenses.filter(e=>e.status!=='VOID');
+  const incurred=kind=>expenses.filter(e=>e.kind===kind&&within(e.incurred_at)).reduce((n,e)=>n+Number(e.amount),0);
+  const paid=kind=>expenses.filter(e=>e.kind===kind&&e.status==='PAID'&&within(e.paid_at)).reduce((n,e)=>n+Number(e.amount),0);
+  const lines=sales.flatMap(s=>s.sale_lines||[]);
+  const pending=lines.some(l=>l.cost_status==='PENDING'||l.fifo_cost==null);
+  const revenue=sales.reduce((n,s)=>n+Number(s.total),0);
+  const commissions=sales.reduce((n,s)=>n+Number(s.commission_total||0),0);
+  const cogs=pending?null:lines.reduce((n,l)=>n+Number(l.fifo_cost),0);
+  const gross=cogs==null?null:revenue-cogs;
+  const operatingExpenses=incurred('OPERATING');
+  const operating=gross==null?null:gross-commissions-operatingExpenses;
+  const loans=incurred('LOAN');
+  // No sustituir una fecha de pago faltante por la fecha del gasto.
+  const cashPending=expenses.some(e=>e.status==='PAID'&&!e.paid_at);
+  const payments=data.sales.filter(s=>s.status!=='VOID').flatMap(s=>s.sale_payments||[])
+    .filter(p=>within(p.created_at||p.paid_at));
+  const collected=payments.reduce((n,p)=>n+Number(p.amount),0);
+  const collectedCommissions=payments.reduce((n,p)=>n+Number(p.commission_amount||0),0);
+  const flow=cashPending?null:collected-collectedCommissions-paid('PURCHASE')-paid('OPERATING');
+  return {period,revenue,operations:sales.length,cogs,gross,commissions,purchases:paid('PURCHASE'),
+    expenses:operatingExpenses,operating,loans,afterLoans:operating==null?null:operating-loans,
+    flow,flowAfterLoans:flow==null?null:flow-paid('LOAN'),pending,cashPending};
+}

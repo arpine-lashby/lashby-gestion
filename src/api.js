@@ -25,6 +25,16 @@ export async function updatePassword(password){
   if(error)throw error;
 }
 export async function session(){if(!supabase)return null;const {data}=await supabase.auth.getSession();return data.session;}
+// Supabase limita las respuestas: recorrer todas las páginas para no truncar informes.
+async function allRows(table, selection='*', order='id') {
+  const rows=[];
+  for(let offset=0;;offset+=500){
+    const result=await supabase.from(table).select(selection).order(order).range(offset,offset+499);
+    if(result.error)return {data:null,error:result.error};
+    rows.push(...result.data);
+    if(result.data.length<500)return {data:rows,error:null};
+  }
+}
 export async function loadAppData(){
   if(!supabase)return demoData;
   const {data:authData,error:authError}=await supabase.auth.getUser();
@@ -35,20 +45,21 @@ export async function loadAppData(){
   if(!profile.data.active)throw new Error('Tu usuario está inactivo.');
   const isAdmin=profile.data.role==='ADMIN';
   const empty=Promise.resolve({data:[],error:null});
-  const [products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit]=await Promise.all([
+  const [products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit,cashMovements]=await Promise.all([
     supabase.from('products_with_stock').select('*').eq('active',true).order('name'),
-    supabase.from('sales').select('*,sale_lines(*),sale_payments(*)').order('created_at',{ascending:false}).limit(50),
+    allRows('sales',isAdmin?'*,sale_lines(*),sale_payments(*)':'*,sale_lines(id,product_id,product_name,quantity,unit_price,discount,line_total),sale_payments(*)'),
     isAdmin?supabase.from('stock_lots').select('*,products(name)').order('received_at',{ascending:false}):empty,
-    isAdmin?supabase.from('expenses').select('*').order('incurred_at',{ascending:false}).limit(50):empty,
+    isAdmin?allRows('expenses'):empty,
     supabase.from('cash_sessions').select('*').order('opened_at',{ascending:false}).limit(1),
     supabase.from('customers').select('*').order('full_name'),
     supabase.from('appointments').select('*,customers(full_name),products(name)').order('starts_at'),
     supabase.from('courses').select('*').order('starts_at',{ascending:false}),
     supabase.from('enrollments').select('*,customers(full_name),courses(name)').order('enrolled_at',{ascending:false}),
-    isAdmin?supabase.from('audit_events').select('*,profiles(full_name)').order('occurred_at',{ascending:false}).limit(100):empty
+    isAdmin?supabase.from('audit_events').select('*,profiles(full_name)').order('occurred_at',{ascending:false}).limit(100):empty,
+    allRows('cash_movements')
   ]);
-  for(const result of [profile,products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit])if(result.error)throw result.error;
-  return {profile:profile.data,products:products.data,sales:sales.data,stock:stock.data,expenses:expenses.data,cashSession:cash.data[0]||null,customers:customers.data,appointments:appointments.data,courses:courses.data,enrollments:enrollments.data,audit:audit.data,demo:false};
+  for(const result of [profile,products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit,cashMovements])if(result.error)throw result.error;
+  return {profile:profile.data,products:products.data,sales:sales.data,stock:stock.data,expenses:expenses.data,cashSession:cash.data[0]||null,customers:customers.data,appointments:appointments.data,courses:courses.data,enrollments:enrollments.data,audit:audit.data,cashMovements:cashMovements.data,demo:false};
 }
 export async function createProduct(payload){const {data,error}=await supabase.from('products').insert(payload).select().single();if(error)throw error;return data;}
 export async function createSale(payload){const {data,error}=await supabase.rpc('process_sale',{p_payload:payload});if(error)throw error;return data;}
@@ -64,5 +75,5 @@ export async function voidSale(saleId,reason){const {error}=await supabase.rpc('
 
 export const demoData={
  demo:true,profile:{full_name:'Arpine Pahlevanyan',role:'ADMIN'},
- products:[],sales:[],stock:[],expenses:[],cashSession:null,customers:[],appointments:[],courses:[],enrollments:[],audit:[]
+ products:[],sales:[],stock:[],expenses:[],cashSession:null,customers:[],appointments:[],courses:[],enrollments:[],audit:[],cashMovements:[]
 };
