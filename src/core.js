@@ -1,5 +1,13 @@
 export const money = (value) => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:2}).format(Number(value||0));
-export const todayISO = () => new Date().toISOString().slice(0,10);
+export const businessDate = (value = new Date()) => {
+  if(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if(Number.isNaN(date.getTime())) throw new Error('Fecha inválida');
+  const parts = new Intl.DateTimeFormat('en-US',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+  const part = type => parts.find(p => p.type === type).value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+export const todayISO = () => businessDate();
 export const calculateSale = (lines, payments=[]) => {
   const subtotal=lines.reduce((sum,l)=>sum+(Number(l.unit_price)*Number(l.quantity)),0);
   const discounts=lines.reduce((sum,l)=>sum+Number(l.discount||0),0);
