@@ -8,12 +8,19 @@ export const businessDate = (value = new Date()) => {
   return `${part('year')}-${part('month')}-${part('day')}`;
 };
 export const todayISO = () => businessDate();
+export function argentinaTimestamp(localValue) {
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localValue||''))throw new Error('Indicá fecha y hora válidas');
+  const date=new Date(`${localValue}:00-03:00`);
+  if(Number.isNaN(date.getTime())||businessDate(date)!==localValue.slice(0,10))throw new Error('Fecha inválida');
+  return date.toISOString();
+}
 export const calculateSale = (lines, payments=[]) => {
-  const subtotal=lines.reduce((sum,l)=>sum+(Number(l.unit_price)*Number(l.quantity)),0);
-  const discounts=lines.reduce((sum,l)=>sum+Number(l.discount||0),0);
-  const total=Math.max(0,subtotal-discounts);
-  const paid=payments.reduce((sum,p)=>sum+Number(p.amount||0),0);
-  return {subtotal,discounts,total,paid,difference:paid-total};
+  const cents=value=>Math.round((Number(value)+Number.EPSILON)*100);
+  const subtotalCents=lines.reduce((sum,l)=>sum+cents(Number(l.unit_price)*Number(l.quantity)),0);
+  const discountCents=lines.reduce((sum,l)=>sum+cents(l.discount||0),0);
+  const totalCents=Math.max(0,subtotalCents-discountCents);
+  const paidCents=payments.reduce((sum,p)=>sum+cents(p.amount||0),0);
+  return {subtotal:subtotalCents/100,discounts:discountCents/100,total:totalCents/100,paid:paidCents/100,difference:(paidCents-totalCents)/100};
 };
 export const consumeFifo = (lots, quantity) => {
   let remaining=Number(quantity); const allocations=[];
