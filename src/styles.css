@@ -22,3 +22,20 @@
 .sidebar .brand-mark{gap:12px;line-height:1.35}
 .topbar-logo{display:block;width:40px;height:40px;object-fit:contain;border-radius:9px;flex-shrink:0}
 @media(max-width:600px){.login-brand .brand-logo{width:76px;height:76px;border-radius:16px}.topbar-logo{width:32px;height:32px}.page-title{font-size:1.05rem}}
+
+/* Logo de marca más visible en PC y celular. */
+.login-brand .brand-logo{width:220px;height:220px;border-radius:28px}
+.login-brand .brand-mark{flex-direction:column;align-items:flex-start;gap:16px}
+.sidebar .brand-logo{width:96px;height:96px;border-radius:18px}
+.sidebar .brand-mark{flex-direction:column;align-items:center;text-align:center;gap:10px;margin-bottom:20px}
+.sidebar .nav{min-height:0;overflow-y:auto;flex:1}
+.sidebar-foot{flex-shrink:0}
+.topbar-logo{width:56px;height:56px;border-radius:12px}
+@media(max-width:900px){.login-brand .brand-logo{width:160px;height:160px}.login-brand .brand-mark{flex-direction:row;align-items:center}.topbar-logo{width:44px;height:44px}}
+@media(max-width:600px){.login-brand .brand-logo{width:128px;height:128px;border-radius:20px}.login-brand .brand-mark{gap:14px}.topbar-logo{width:40px;height:40px}.topbar{gap:8px}.topbar .btn{padding:10px}}
+
+/* Salir: contraste claro sobre el menú oscuro. */
+.sidebar-foot .logout{width:100%;background:#352832;color:#fff;border:1px solid #8f7384;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 16px;font-weight:700}
+.sidebar-foot .logout:hover{background:#503746;color:#fff}
+.sidebar-foot .logout:focus-visible{outline:3px solid var(--pink);outline-offset:3px}
+.sidebar-foot .logout svg{color:inherit;flex-shrink:0}
