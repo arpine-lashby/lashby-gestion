@@ -39,3 +39,5 @@
 .sidebar-foot .logout:hover{background:#503746;color:#fff}
 .sidebar-foot .logout:focus-visible{outline:3px solid var(--pink);outline-offset:3px}
 .sidebar-foot .logout svg{color:inherit;flex-shrink:0}
+
+.payment-row{grid-template-columns:minmax(110px,1fr) 100px 115px 30px}.card+.card{margin-top:18px}.certificate{padding:24px;text-align:center;border:2px solid var(--gold)}.line-discount{border:1px solid var(--line);border-radius:6px;padding:5px}@media(max-width:600px){.payment-row{grid-template-columns:1fr 1fr}.cart-line{grid-template-columns:1fr auto}.card .toolbar{flex-wrap:wrap}}

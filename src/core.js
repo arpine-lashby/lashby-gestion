@@ -63,3 +63,21 @@ export function periodSummary(data, period) {
     expenses:operatingExpenses,operating,loans,afterLoans:operating==null?null:operating-loans,
     flow,flowAfterLoans:flow==null?null:flow-paid('LOAN'),pending,cashPending};
 }
+
+// Reparte un descuento en centavos sin superar el importe de ninguna línea.
+export function applyTotalDiscount(lines, amount=0) {
+ const cents=v=>Math.round((Number(v)+Number.EPSILON)*100);
+ const result=lines.map(l=>({...l}));
+ const due=result.map(l=>{
+  const gross=cents(Number(l.unit_price)*Number(l.quantity));const discount=cents(l.discount||0);
+  if(!Number.isFinite(gross)||!Number.isFinite(discount)||discount<0||discount>gross)throw new Error('Descuento por producto inválido');
+  return gross-discount;
+ });
+ const total=due.reduce((a,b)=>a+b,0);let remaining=cents(amount);
+ if(!Number.isFinite(remaining)||remaining<0||remaining>total)throw new Error('El descuento supera el total');
+ const shares=due.map(v=>total?Math.floor(remaining*v/total):0);
+ remaining-=shares.reduce((a,b)=>a+b,0);
+ for(let i=0;i<shares.length&&remaining;i++){const take=Math.min(remaining,due[i]-shares[i]);shares[i]+=take;remaining-=take;}
+ result.forEach((l,i)=>l.discount=(cents(l.discount||0)+shares[i])/100);
+ return result;
+}

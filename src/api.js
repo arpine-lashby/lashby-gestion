@@ -46,22 +46,23 @@ export async function loadAppData(){
   const isAdmin=profile.data.role==='ADMIN';
   const empty=Promise.resolve({data:[],error:null});
   const [products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit,cashMovements,variants,receipts]=await Promise.all([
-    supabase.from('products_with_stock').select('*').eq('active',true).order('name'),
+    allRows('products_with_stock','*','name'),
     supabase.rpc('read_sales_safe'),
     isAdmin?allRows('stock_lots','*,products(name)'):empty,
     isAdmin?allRows('expenses'):empty,
     supabase.from('cash_sessions').select('*').order('opened_at',{ascending:false}).limit(1),
-    supabase.from('customers').select('*').order('full_name'),
-    supabase.from('appointments').select('*,customers(full_name),products(name)').order('starts_at'),
-    supabase.from('courses').select('*').order('starts_at',{ascending:false}),
-    supabase.from('enrollments').select('*,customers(full_name),courses(name)').order('enrolled_at',{ascending:false}),
+    allRows('customers','*','full_name'),
+    allRows('appointments','*,customers(full_name),products(name)','starts_at'),
+    allRows('courses','*','starts_at'),
+    allRows('enrollments','*,customers(full_name),courses(name)','enrolled_at'),
     isAdmin?supabase.from('audit_events').select('*,profiles(full_name)').order('occurred_at',{ascending:false}).limit(100):empty,
     allRows('cash_movements'),
     allRows('product_variants'),
     isAdmin?allRows('stock_receipts'):empty
   ]);
   for(const result of [profile,products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit,cashMovements,variants,receipts])if(result.error)throw result.error;
-  return {profile:profile.data,products:products.data,sales:sales.data,stock:stock.data,expenses:expenses.data,cashSession:cash.data[0]||null,customers:customers.data,appointments:appointments.data,courses:courses.data,enrollments:enrollments.data,audit:audit.data,cashMovements:cashMovements.data,variants:variants.data,receipts:receipts.data,demo:false};
+  const extra={};for(const table of ['promotions','product_units','service_collections','student_installments','student_payments','attendance','certificates','appointment_reminders']){const r=await allRows(table);if(r.error)throw r.error;extra[table]=r.data}if(isAdmin){const r=await allRows('suppliers');if(r.error)throw r.error;extra.suppliers=r.data}else extra.suppliers=[];const settings=await supabase.rpc('read_payment_settings');if(settings.error)throw settings.error;extra.paymentSettings=settings.data;
+  return {...extra,profile:profile.data,products:products.data,sales:sales.data,stock:stock.data,expenses:expenses.data,cashSession:cash.data[0]||null,customers:customers.data,appointments:appointments.data,courses:courses.data,enrollments:enrollments.data,audit:audit.data,cashMovements:cashMovements.data,variants:variants.data,receipts:receipts.data,demo:false};
 }
 export async function createProduct(payload){const {data,error}=await supabase.from('products').insert(payload).select().single();if(error)throw error;return data;}
 export async function createSale(payload){const {data,error}=await supabase.rpc('process_sale',{p_payload:payload});if(error)throw error;return data;}
@@ -87,3 +88,7 @@ export async function completeLotCost(id,total){const {error}=await supabase.rpc
 export async function createVariant(payload){const {data,error}=await supabase.from('product_variants').insert(payload).select().single();if(error)throw error;return data;}
 
 export async function voidStockReceipt(id,reason){const {error}=await supabase.rpc('void_stock_receipt',{p_receipt_id:id,p_reason:reason});if(error)throw error;}
+
+export async function callOperation(name,args){const {data,error}=await supabase.rpc(name,args);if(error)throw error;return data;}
+export async function saveRecord(table,payload,id=null){const query=id?supabase.from(table).update(payload).eq('id',id):supabase.from(table).insert(payload);const {data,error}=await query.select().single();if(error)throw error;return data;}
+export async function setAttendance(payload){const {error}=await supabase.from('attendance').upsert(payload,{onConflict:'enrollment_id,class_date'});if(error)throw error;}
