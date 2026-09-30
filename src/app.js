@@ -7,7 +7,7 @@ import {money,calculateSale,todayISO,businessDate,periodSummary,cashExpected,arg
 const app=document.querySelector('#app');
 const state={route:'dashboard',data:null,cart:[],payments:[{method:'CASH',amount:0}],modal:null,search:'',saleDiscount:0,customerId:'',creditUsed:0,exchange:null};
 const nav=[['dashboard','LayoutDashboard','Resumen'],['sale','ShoppingBag','Nueva venta'],['sales','Receipt','Historial de ventas'],['products','Package','Productos'],['stock','Boxes','Stock'],['cash','WalletCards','Caja'],['expenses','ReceiptText','Costos y gastos'],['appointments','CalendarDays','Turnos'],['students','GraduationCap','Alumnas'],['reports','ChartNoAxesCombined','Informes'],['customers','Users','Clientas'],['promotions','BadgePercent','Promociones'],['suppliers','Truck','Proveedores'],['settings','Settings','Comisiones'],['audit','ShieldCheck','Auditoría']];
-const icon=(name)=>`<i data-lucide="${name}"></i>`;
+const icon=(name)=>`<i data-lucide="${name.replace(/([a-z0-9])([A-Z])/g,'$1-$2').toLowerCase()}"></i>`;
 const esc=(v='')=>String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
 function hydrateIcons(){createIcons({icons});}
