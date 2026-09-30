@@ -44,10 +44,11 @@ export function periodSummary(data, period) {
   const incurred=kind=>expenses.filter(e=>e.kind===kind&&within(e.incurred_at)).reduce((n,e)=>n+Number(e.amount),0);
   const paid=kind=>expenses.filter(e=>e.kind===kind&&e.status==='PAID'&&within(e.paid_at)).reduce((n,e)=>n+Number(e.amount),0);
   const lines=sales.flatMap(s=>s.sale_lines||[]);
-  const pending=lines.some(l=>l.cost_status==='PENDING'||l.fifo_cost==null);
-  const revenue=sales.reduce((n,s)=>n+Number(s.total),0);
+  const activeReturns=(data.returns||[]).filter(r=>r.status==='ACTIVE'&&within(r.created_at));
+  const revenue=sales.reduce((n,s)=>n+Number(s.total),0)-activeReturns.flatMap(r=>r.return_lines||[]).reduce((n,l)=>n+Number(l.returned_value||0),0);
   const commissions=sales.reduce((n,s)=>n+Number(s.commission_total||0),0);
-  const cogs=pending?null:lines.reduce((n,l)=>n+Number(l.fifo_cost),0);
+  const costing=fifoPeriodCost(data,period);
+  const pending=costing.pending;const cogs=costing.cogs;
   const gross=cogs==null?null:revenue-cogs;
   const operatingExpenses=incurred('OPERATING');
   const operating=gross==null?null:gross-commissions-operatingExpenses;
@@ -80,4 +81,27 @@ export function applyTotalDiscount(lines, amount=0) {
  for(let i=0;i<shares.length&&remaining;i++){const take=Math.min(remaining,due[i]-shares[i]);shares[i]+=take;remaining-=take;}
  result.forEach((l,i)=>l.discount=(cents(l.discount||0)+shares[i])/100);
  return result;
+}
+
+// El costo de una devolución revierte la asignación histórica; nunca usa el precio del lote nuevo.
+export function fifoPeriodCost(data, period='') {
+ const within=value=>Boolean(value)&&businessDate(value).startsWith(period);
+ const sales=data.sales.filter(s=>s.status!=='VOID'&&within(s.created_at));const lines=sales.flatMap(s=>s.sale_lines||[]);
+ const returns=(data.returns||[]).filter(r=>r.status==='ACTIVE'&&within(r.created_at));
+ if(!data.fifoAllocations){const pending=lines.some(l=>l.cost_status==='PENDING'||l.fifo_cost==null);return {pending,cogs:pending?null:lines.reduce((n,l)=>n+Number(l.fifo_cost),0)}}
+ const byId=new Map();let cents=0;let pending=false;
+ const add=(id,qty,cost,money)=>{const item=byId.get(id)||{qty:0,cost,money:0};item.qty+=qty;item.money+=money;byId.set(id,item)};
+ for(const line of lines){const allocations=data.fifoAllocations.filter(a=>a.sale_line_id===line.id);if(!allocations.length){if(line.cost_status==='PENDING'||line.fifo_cost==null)pending=true;else cents+=Math.round(Number(line.fifo_cost)*100)}for(const a of allocations)add(a.id,Number(a.quantity),a.unit_cost,Math.round(Number(a.allocated_cost||0)*100));}
+ for(const r of returns)for(const l of r.return_lines||[])for(const a of l.return_allocations||[])add(a.sale_allocation_id,-Number(a.quantity),a.unit_cost,-Math.round(Number(a.quantity)*Number(a.unit_cost||0)*100));
+ for(const item of byId.values()){if(Math.abs(item.qty)<.0005)continue;if(item.cost==null)pending=true;else cents+=item.money;}
+ return {pending,cogs:pending?null:cents/100};
+}
+export function customerCredit(data, customerId){return Math.round((data.customer_credit_transactions||[]).filter(t=>t.customer_id===customerId&&t.status==='ACTIVE').reduce((n,t)=>n+(t.direction==='IN'?1:-1)*Number(t.amount),0)*100)/100;}
+
+export function physicalUnitsForPeriod(data,period){
+ const lines=data.sales.filter(s=>s.status!=='VOID'&&businessDate(s.created_at).startsWith(period)).flatMap(s=>s.sale_lines||[]);
+ const physical=l=>['SIMPLE','KIT_COMPONENTS','KIT_OWN_STOCK'].includes(data.products.find(p=>p.id===l.product_id)?.product_type);
+ let total=lines.filter(physical).reduce((n,l)=>n+Number(l.stock_quantity??l.quantity),0);
+ for(const r of (data.returns||[]).filter(r=>r.status==='ACTIVE'&&businessDate(r.created_at).startsWith(period)))for(const rl of r.return_lines||[]){const l=data.sales.flatMap(s=>s.sale_lines||[]).find(l=>l.id===rl.sale_line_id);if(l&&physical(l))total-=Number(rl.quantity)*Number(l.stock_quantity??l.quantity)/Number(l.quantity);}
+ return Math.round(total*1000)/1000;
 }
