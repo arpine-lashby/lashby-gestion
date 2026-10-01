@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import {currentCashSession} from './core.js';
 
 const url=import.meta.env.VITE_SUPABASE_URL;
 const key=import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -29,7 +30,9 @@ export async function session(){if(!supabase)return null;const {data}=await supa
 async function allRows(table, selection='*', order='id') {
   const rows=[];
   for(let offset=0;;offset+=500){
-    const result=await supabase.from(table).select(selection).order(order).range(offset,offset+499);
+    let query=supabase.from(table).select(selection).order(order);
+    if(order!=='id')query=query.order('id');
+    const result=await query.range(offset,offset+499);
     if(result.error)return {data:null,error:result.error};
     rows.push(...result.data);
     if(result.data.length<500)return {data:rows,error:null};
@@ -55,14 +58,24 @@ export async function loadAppData(){
     allRows('appointments','*,customers(full_name),products(name)','starts_at'),
     allRows('courses','*','starts_at'),
     allRows('enrollments','*,customers(full_name),courses(name)','enrolled_at'),
-    isAdmin?supabase.from('audit_events').select('*,profiles(full_name)').order('occurred_at',{ascending:false}).limit(100):empty,
+    isAdmin?supabase.from('audit_events').select('*,profiles(full_name)').order('id',{ascending:false}).limit(101):empty,
     allRows('cash_movements'),
     allRows('product_variants'),
     isAdmin?allRows('stock_receipts'):empty
   ]);
   for(const result of [profile,products,sales,stock,expenses,cash,customers,appointments,courses,enrollments,audit,cashMovements,variants,receipts])if(result.error)throw result.error;
   const extra={};for(const table of ['promotions','product_units','service_collections','student_installments','student_payments','attendance','certificates','appointment_reminders','kit_components','kit_assemblies','customer_credit_transactions']){const r=await allRows(table);if(r.error)throw r.error;extra[table]=r.data}if(isAdmin){const r=await allRows('suppliers');if(r.error)throw r.error;extra.suppliers=r.data}else extra.suppliers=[];const settings=await supabase.rpc('read_payment_settings');if(settings.error)throw settings.error;extra.paymentSettings=settings.data;const returns=await supabase.rpc('read_returns_safe');if(returns.error)throw returns.error;extra.returns=returns.data;if(isAdmin){const a=await allRows('sale_cost_allocations');if(a.error)throw a.error;extra.fifoAllocations=a.data}
-  return {...extra,profile:profile.data,products:products.data,sales:sales.data,stock:stock.data,expenses:expenses.data,cashSession:cash.data[0]||null,customers:customers.data,appointments:appointments.data,courses:courses.data,enrollments:enrollments.data,audit:audit.data,cashMovements:cashMovements.data,variants:variants.data,receipts:receipts.data,demo:false};
+  const lastCashSession=cash.data[0]||null;
+  const cashSession=currentCashSession(lastCashSession);
+  if(cashSession){const r=await supabase.rpc('read_cash_expected',{p_session_id:cashSession.id});if(r.error)throw r.error;extra.cashExpected=Number(r.data);}
+  return {...extra,profile:profile.data,products:products.data,sales:sales.data,stock:stock.data,expenses:expenses.data,cashSession,lastCashSession,customers:customers.data,appointments:appointments.data,courses:courses.data,enrollments:enrollments.data,audit:audit.data.slice(0,100),auditHasMore:audit.data.length>100,cashMovements:cashMovements.data,variants:variants.data,receipts:receipts.data,demo:false};
+}
+
+export async function loadAuditPage(beforeId=null){
+ let q=supabase.from('audit_events').select('*,profiles(full_name)').order('id',{ascending:false}).limit(101);
+ if(beforeId!=null)q=q.lt('id',beforeId);
+ const {data,error}=await q;if(error)throw error;
+ return {rows:data.slice(0,100),hasMore:data.length>100};
 }
 export async function createProduct(payload){const {data,error}=await supabase.from('products').insert(payload).select().single();if(error)throw error;return data;}
 export async function createSale(payload){const {data,error}=await supabase.rpc('process_sale',{p_payload:payload});if(error)throw error;return data;}

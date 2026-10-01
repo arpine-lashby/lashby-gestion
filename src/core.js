@@ -8,6 +8,7 @@ export const businessDate = (value = new Date()) => {
   return `${part('year')}-${part('month')}-${part('day')}`;
 };
 export const todayISO = () => businessDate();
+export const currentCashSession = (latest, day=todayISO()) => latest&&(latest.status==='OPEN'||businessDate(latest.opened_at)===day)?latest:null;
 export function argentinaTimestamp(localValue) {
   if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localValue||''))throw new Error('Indicá fecha y hora válidas');
   const date=new Date(`${localValue}:00-03:00`);
